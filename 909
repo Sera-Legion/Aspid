@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>АСПИД: Осколок Мира</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #0a0a0a;
+            color: #00ff00;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .game-container {
+            max-width: 800px;
+            margin: 0 auto;
+            border: 1px solid #00ff00;
+            padding: 20px;
+            background-color: #001100;
+            min-height: 80vh;
+        }
+        #output {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #003300;
+            padding: 15px;
+            margin-bottom: 20px;
+            background-color: #000;
+        }
+        .message {
+            margin-bottom: 10px;
+            opacity: 0;
+            animation: fadeIn 0.5s ease-in forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .npc { color: #ffff00; }
+        .player { color: #00ffff; }
+        .system { color: #ff4444; font-weight: bold; }
+        .loot { color: #ffaa00; }
+        .danger { color: #ff4444; }
+        .heal { color: #44ff44; }
+        .health-bar {
+            display: inline-block;
+            width: 100px;
+            height: 10px;
+            background: #333;
+            margin: 0 5px;
+            vertical-align: middle;
+        }
+        .health-fill {
+            height: 100%;
+            background: #00ff00;
+            transition: width 0.3s;
+        }
+        button {
+            background: #003300;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 10px 15px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+        }
+        button:hover { background: #005500; }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .hidden { display: none; }
+        .location-desc { color: #8888ff; font-style: italic; }
+        .combat-actions {
+            border: 2px solid #ff4444;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .squad-member { margin: 5px 0; }
+        .inventory-item {
+            margin: 5px;
+            padding: 5px;
+            border: 1px solid #444;
+            display: inline-block;
+        }
+        .character-creation {
+            border: 2px solid #00ff00;
+            padding: 20px;
+            margin: 20px 0;
+            background-color: #002200;
+        }
+        .character-creation input {
+            background: #001100;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 8px;
+            margin: 5px;
+            font-family: 'Courier New', monospace;
+            width: 200px;
+        }
+        .character-creation label {
+            display: inline-block;
+            width: 120px;
+            color: #ffff00;
+        }
+        .role-desc {
+            color: #8888ff;
+            font-size: 0.9em;
+            margin-left: 125px;
+            margin-bottom: 10px;
+        }
+        .credits {
+            text-align: center;
+            padding: 40px;
+            border: 3px solid #00ff00;
+            margin: 20px 0;
+            background: #000;
+        }
+        .credits h2 { color: #ffff00; }
+        .credits p { margin: 15px 0; }
+        .mission-complete { color: #44ff44; font-weight: bold; }
+        .story-item { color: #ffaa00; font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>⚡ АСПИД: Осколок Мира</h1>
+
+        <div id="character-creation" class="character-creation">
+            <h2>🎯 СОЗДАНИЕ ОТРЯДА</h2>
+            <p>Введите имена для каждого члена вашего отряда:</p>
+
+            <div class="squad-input">
+                <label for="leader">Лидер:</label>
+                <input type="text" id="leader" placeholder="Командир отряда" maxlength="20">
+                <div class="role-desc">Тактик и руководитель операции</div>
+
+                <label for="bars">Штурмовик:</label>
+                <input type="text" id="bars" placeholder="Силовой специалист" maxlength="20">
+                <div class="role-desc">Основная огневая мощь отряда</div>
+
+                <label for="sokol">Снайпер:</label>
+                <input type="text" id="sokol" placeholder="Меткий стрелок" maxlength="20">
+                <div class="role-desc">Точные выстрелы на дальние дистанции</div>
+
+                <label for="ghost">Разведчик:</label>
+                <input type="text" id="ghost" placeholder="Невидимый охотник" maxlength="20">
+                <div class="role-desc">Мастер скрытного перемещения</div>
+
+                <label for="medic">Медик:</label>
+                <input type="text" id="medic" placeholder="Спаситель отряда" maxlength="20">
+                <div class="role-desc">Ответственный за здоровье команды</div>
+            </div>
+
+            <button onclick="startGameWithCustomNames()">🎮 НАЧАТЬ МИССИЮ</button>
+        </div>
+
+        <div id="game-content" class="hidden">
+            <div id="output"></div>
+
+            <div id="controls">
+                <button onclick="gameAction('look')">Осмотреться</button>
+                <button onclick="showInventory()">Инвентарь</button>
+                <button onclick="showMap()">Карта</button>
+                <button onclick="showStatus()">Статус отряда</button>
+                <div id="move-buttons"></div>
+            </div>
+
+            <div id="combat-controls" class="hidden">
+                <div class="combat-actions">
+                    <h3>⚔️ БОЕВЫЕ ДЕЙСТВИЯ</h3>
+                    <button onclick="combatAction('attack')">Атаковать (-10 патронов)</button>
+                    <button onclick="combatAction('grenade')">Граната (-1)</button>
+                    <button onclick="combatAction('impulse')">Импульс (-1 заряд)</button>
+                    <button onclick="combatAction('heal')">Лечить отряд (-1 аптечка)</button>
+                    <button onclick="combatAction('retreat')">Отступить</button>
+                </div>
+            </div>
+
+            <div id="inventory-controls" class="hidden">
+                <div class="combat-actions">
+                    <h3>🎒 ИНВЕНТАРЬ</h3>
+                    <div id="inventory-items"></div>
+                    <button onclick="hideInventory()">Закрыть инвентарь</button>
+                </div>
+            </div>
+
+            <div id="credits" class="credits hidden">
+                <h2>🎬 МИССИЯ ВЫПОЛНЕНА</h2>
+                <div id="credits-content"></div>
+                <button onclick="location.reload()">🔄 НАЧАТЬ ЗАНОВО</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class TextAdventureGame {
+            constructor() {
+                this.locations = {
+                    'start': {
+                        name: 'LZ "Ворон"',
+                        desc: 'Заброшенная асфальтированная площадка. Ржавые каркасы ангаров. Воздух плотный, пахнет озоном.',
+                        connections: ['old_road', 'hangar', 'forest'],
+                        searched: false,
+                        special: null
+                    },
+                    'old_road': {
+                        name: 'Старая дорога',
+                        desc: 'Разбитая дорога, уходящая вглубь зоны. По бокам — скелеты машин.',
+                        connections: ['start', 'checkpoint'],
+                        searched: false,
+                        special: null
+                    },
+                    'hangar': {
+                        name: 'Заброшенный ангар',
+                        desc: 'Полумрак, с потолка капает вода. В центре — недоделанный каркас самолета.',
+                        connections: ['start', 'admin_building'],
+                        searched: false,
+                        special: 'scientist_body'
+                    },
+                    'forest': {
+                        name: 'Лесная чаща',
+                        desc: 'Густой, неестественно тихий лес. Воздух мерцает.',
+                        connections: ['start', 'anomaly_core'],
+                        searched: false,
+                        special: 'anomaly_zone'
+                    },
+                    'checkpoint': {
+                        name: 'КПП "Северный"',
+                        desc: 'Разрушенный контрольно-пропускной пункт. Бронетранспортер перевернут на бок.',
+                        connections: ['old_road', 'laboratory'],
+                        searched: false,
+                        special: null,
+                        locked: true
+                    },
+                    'admin_building': {
+                        name: 'Административное здание',
+                        desc: 'Трехэтажное здание с выбитыми окнами. На стенах — странные символы.',
+                        connections: ['hangar', 'laboratory'],
+                        searched: false,
+                        special: 'research_data',
+                        locked: true
+                    },
+                    'laboratory': {
+                        name: 'Секретная лаборатория',
+                        desc: 'Подземный комплекс. Оборудование покрыто инеем. В воздухе висит статическое электричество.',
+                        connections: ['checkpoint', 'admin_building', 'anomaly_core'],
+                        searched: false,
+                        special: 'weapon_cache',
+                        locked: true
+                    },
+                    'anomaly_core': {
+                        name: 'Эпицентр аномалии',
+                        desc: 'Гигантский кристалл парит в воздухе, испуская пульсирующее свечение. Вокруг — искаженная реальность.',
+                        connections: ['forest', 'laboratory'],
+                        searched: false,
+                        special: 'final_boss',
+                        locked: true
+                    }
+                };
+
+                this.currentLocation = 'start';
+                    this.inventory = {
+                        'medkit': { name: 'Аптечка', count: 3, usable: true, type: 'heal' },
+                        'ammo': { name: 'Патроны', count: 200, usable: false, type: 'ammo' }, // Было 150, стало 250
+                        'detector': { name: 'Детектор аномалий', count: 1, usable: true, type: 'utility' },
+                        'grenade': { name: 'Граната', count: 1, usable: true, type: 'combat' },
+                        'impulse_charges': { name: 'Заряды Импульса', count: 0, usable: true, type: 'combat' },
+                        'crystal_artifact': { name: 'Кристалл Ясности', count: 0, usable: true, type: 'artifact' },
+                        'storm_artifact': { name: 'Сердце Бури', count: 0, usable: true, type: 'artifact' },
+                        'armor_plate': { name: 'Бронепластина', count: 0, usable: true, type: 'armor' },
+                        'scientist_note': { name: 'Записка ученого', count: 0, usable: true, type: 'story' },
+                        'access_card': { name: 'Ключ-карта', count: 0, usable: false, type: 'key' }
+                    };
+                this.squad = {
+                    'leader': { name: 'Лидер', hp: 100, maxHp: 100, status: 'Здоров', armor: 0, role: 'Командир' },
+                    'bars': { name: 'Барс', hp: 100, maxHp: 100, status: 'Здоров', armor: 0, role: 'Штурмовик' },
+                    'sokol': { name: 'Сокол', hp: 100, maxHp: 100, status: 'Здоров', armor: 0, role: 'Снайпер' },
+                    'ghost': { name: 'Призрак', hp: 100, maxHp: 100, status: 'Здоров', armor: 0, role: 'Разведчик' },
+                    'medic': { name: 'Медик', hp: 100, maxHp: 100, status: 'Здоров', armor: 0, role: 'Медик' }
+                };
+
+                this.inCombat = false;
+                this.currentEnemy = null;
+                this.enemyHP = 0;
+
+                this.visitedLocations = new Set(['start']);
+                this.gameActive = false;
+                this.audio = new Audio('озвучка1.mp3');
+                this.missionStatus = {
+                    foundNote: false,
+                    foundPrometheus: false,
+                    destroyedSource: false,
+                    evacuated: false
+                };
+            }
+
+            setSquadNames(names) {
+                this.squad.leader.name = names.leader || 'Лидер';
+                this.squad.bars.name = names.bars || 'Барс';
+                this.squad.sokol.name = names.sokol || 'Сокол';
+                this.squad.ghost.name = names.ghost || 'Призрак';
+                this.squad.medic.name = names.medic || 'Медик';
+                this.addMessage(`✅ Отряд сформирован! Добро пожаловать, ${this.squad.leader.name}!`, 'system');
+            }
+
+            showSquadIntroduction() {
+                this.addMessage('<strong>👥 СОСТАВ ВАШЕГО ОТРЯДА:</strong>', 'system');
+                Object.values(this.squad).forEach(member => {
+                    this.addMessage(`• ${member.name} - ${member.role}`, 'player');
+                });
+                this.addMessage('', 'system');
+            }
+
+            rollD20() {
+                return Math.floor(Math.random() * 20) + 1;
+            }
+
+            addMessage(text, className = '') {
+                const output = document.getElementById('output');
+                const message = document.createElement('div');
+                message.className = `message ${className}`;
+                message.innerHTML = text;
+                output.appendChild(message);
+                output.scrollTop = output.scrollHeight;
+            }
+
+            async typewriterEffect(text, className = '', delay = 30) {
+                return new Promise(resolve => {
+                    const output = document.getElementById('output');
+                    const message = document.createElement('div');
+                    message.className = `message ${className}`;
+                    output.appendChild(message);
+
+                    let i = 0;
+                    const timer = setInterval(() => {
+                        message.innerHTML = text.substring(0, i++) + '_';
+                        if (i > text.length) {
+                            clearInterval(timer);
+                            message.innerHTML = text;
+                            output.scrollTop = output.scrollHeight;
+                            resolve();
+                        }
+                    }, delay);
+                });
+            }
+
+            updateMoveButtons() {
+                const container = document.getElementById('move-buttons');
+                container.innerHTML = '';
+
+                const current = this.locations[this.currentLocation];
+                current.connections.forEach(locId => {
+                    const loc = this.locations[locId];
+
+                    if (loc.locked && !this.canAccessLocation(locId)) {
+                        const btn = document.createElement('button');
+                        btn.textContent = `→ ${loc.name} [ЗАБЛОКИРОВАНО]`;
+                        btn.disabled = true;
+                        container.appendChild(btn);
+                    } else {
+                        const btn = document.createElement('button');
+                        btn.textContent = `→ ${loc.name}`;
+                        btn.onclick = () => this.moveTo(locId);
+                        container.appendChild(btn);
+                    }
+                });
+            }
+
+            canAccessLocation(locationId) {
+                const location = this.locations[locationId];
+                if (locationId === 'checkpoint' && this.missionStatus.foundNote) return true;
+                if (locationId === 'admin_building' && this.missionStatus.foundNote) return true;
+                if (locationId === 'laboratory' && this.inventory.access_card.count > 0) return true;
+                if (locationId === 'anomaly_core' && this.missionStatus.foundPrometheus) return true;
+                return !location.locked;
+            }
+
+            moveTo(locationId) {
+                if (!this.gameActive || this.inCombat) return;
+
+                if (this.locations[locationId].locked && !this.canAccessLocation(locationId)) {
+                    this.addMessage('❌ Путь заблокирован. Нужно найти способ открыть доступ.', 'system');
+                    return;
+                }
+
+                this.currentLocation = locationId;
+                this.visitedLocations.add(locationId);
+
+                this.addMessage(`<strong>Вы переместились в: ${this.locations[locationId].name}</strong>`, 'system');
+                this.addMessage(this.locations[locationId].desc, 'location-desc');
+
+                this.checkStoryEvents();
+                this.updateMoveButtons();
+                this.locations[locationId].searched = false;
+            }
+
+            checkStoryEvents() {
+                   if (this.currentLocation === 'laboratory' && !this.missionStatus.foundPrometheus) {
+                       this.missionStatus.foundPrometheus = true;
+                       this.inventory.impulse_charges.count += 5; // Добавляем заряды для босса
+                       this.addMessage('<strong>🎯 ЗАДАЧА ВЫПОЛНЕНА: Найдена группа "Прометей"!</strong>', 'mission-complete');
+                       this.addMessage('💥 <strong>Получены специальные заряды для уничтожения источника аномалии!</strong>', 'loot');
+                       this.addMessage('В лаборатории вы находите остатки оборудования и специальные заряды "Импульс".', 'story-item');
+                   }
+
+                   if (this.currentLocation === 'anomaly_core' && !this.missionStatus.destroyedSource) {
+                       this.addMessage('<strong>🌪️ ВЫ ДОСТИГЛИ ИСТОЧНИКА АНОМАЛИИ!</strong>', 'danger');
+                       this.startFinalBattle();
+                   }
+
+                   if (this.currentLocation === 'start' && this.missionStatus.destroyedSource && !this.missionStatus.evacuated) {
+                       this.completeMission();
+                   }
+               }
+
+            lookAround() {
+                if (!this.gameActive || this.inCombat) return;
+
+                const location = this.locations[this.currentLocation];
+                if (location.searched) {
+                    this.addMessage('Вы уже тщательно осматривали это место. Ничего нового.', 'system');
+                    return;
+                }
+
+                location.searched = true;
+                const roll = this.rollD20();
+                this.addMessage(`<strong>Бросок кубика: ${roll}</strong>`, 'system');
+
+                let result = '';
+                let loot = '';
+
+                if (roll <= 5) {
+                    result = this.getCriticalFailDescription();
+                    this.encounterEnemy();
+                } else if (roll <= 10) {
+                    result = this.getNeutralDescription();
+                    loot = this.getStandardLoot();
+                } else if (roll <= 15) {
+                    result = this.getSuccessDescription();
+                    loot = this.getGoodLoot();
+                } else if (roll <= 19) {
+                    result = this.getGreatDescription();
+                    loot = this.getExcellentLoot();
+                } else {
+                    result = this.getCriticalDescription();
+                    loot = this.getLegendaryLoot();
+                }
+
+                this.addMessage(result, 'location-desc');
+                if (loot) {
+                    this.addMessage(`<strong>Найдено: ${loot}</strong>`, 'loot');
+                    this.addToInventory(loot);
+                }
+
+                this.checkSpecialLocation();
+            }
+
+            getCriticalFailDescription() {
+                const descriptions = {
+                    'start': "Вы сосредотачиваетесь, но взгляд скользит по ржавым стенам. Из темноты ангара доносится подозрительный шорох...",
+                    'old_road': "Попытка осмотра только усиливает чувство опасности. Кажется, за разбитыми машинами кто-то прячется.",
+                    'hangar': "В полумраке вы не замечаете ничего полезного, только слышите странное шуршание с потолка.",
+                    'forest': "Густая листва мешает обзору. Вы чувствуете, что за вами наблюдают."
+                };
+                return descriptions[this.currentLocation] || "Осмотр не дает результатов, только усиливает тревогу.";
+            }
+
+            getNeutralDescription() {
+                return "Стандартная картина разрухи. Ничего примечательного.";
+            }
+
+            getSuccessDescription() {
+                const details = {
+                    'start': "Вы замечаете странные цветовые блики на ржавом металле ангаров. Возможно, это следы аномальной активности.",
+                    'old_road': "Стекло в разбитых машинах покрыто странным узором. На земле видны свежие следы.",
+                    'hangar': "Капли воды с потолка падают с неровным ритмом. В углу заметен ящик с припасами.",
+                    'forest': "Среди листвы заметны следы чьей-то недавней деятельности."
+                };
+                return details[this.currentLocation] || "Вы находите интересные детали местности.";
+            }
+
+            getGreatDescription() {
+                const details = {
+                    'start': "Ваше внимание привлекают следы на асфальте. Кто-то недавно устанавливал здесь оборудование.",
+                    'hangar': "Под самолетом вы находите скрытый люк. Рядом - тело ученого с важными документами.",
+                    'forest': "Вы обнаруживаете замаскированный лагерь с ценными припасами."
+                };
+                return details[this.currentLocation] || "Вы находите ценные сведения о этом месте.";
+            }
+
+            getCriticalDescription() {
+                const details = {
+                    'hangar': "Вспышка озарения! Вы замечаете почти невидимую панель под верстаком. Это тайник с экспериментальным оружием 'Импульс'!",
+                    'forest': "Внезапно вы понимаете закономерность в росте деревьев. Они указывают на скрытый источник аномальной энергии!"
+                };
+                return details[this.currentLocation] || "Критический успех! Вы раскрываете секрет этой локации!";
+            }
+
+            getStandardLoot() {
+                const loot = ['Патроны (30 шт.)', 'Аптечка'];
+                return loot[Math.floor(Math.random() * loot.length)];
+            }
+
+            getGoodLoot() {
+                return 'Улучшенные патроны (50 шт.)';
+            }
+
+            getExcellentLoot() {
+                const loot = ['Кристалл Ясности', 'Бронепластина'];
+                return loot[Math.floor(Math.random() * loot.length)];
+            }
+
+            getLegendaryLoot() {
+                if (this.currentLocation === 'hangar') return 'Заряды Импульса (3 шт.)';
+                return 'Сердце Бури';
+            }
+
+            addToInventory(item) {
+                if (item.includes('Патроны')) {
+                    this.inventory.ammo.count += item.includes('Улучшенные') ? 50 : 30;
+                }
+                else if (item.includes('Аптечка')) this.inventory.medkit.count += 1;
+                else if (item.includes('Граната')) this.inventory.grenade.count += 1;
+                else if (item.includes('Импульс')) this.inventory.impulse_charges.count += 3;
+                else if (item.includes('Кристалл')) this.inventory.crystal_artifact.count += 1;
+                else if (item.includes('Сердце')) this.inventory.storm_artifact.count += 1;
+                else if (item.includes('Бронепластина')) this.inventory.armor_plate.count += 1;
+            }
+
+            checkSpecialLocation() {
+                const location = this.locations[this.currentLocation];
+
+                if (location.special === 'scientist_body' && !this.missionStatus.foundNote) {
+                    this.missionStatus.foundNote = true;
+                    this.inventory.scientist_note.count = 1;
+                    this.addMessage('🎯 Вы нашли тело ученого! В кармане - записка с координатами.', 'story-item');
+                    this.addMessage('📜 <strong>Получена записка ученого! Проверьте инвентарь.</strong>', 'loot');
+                }
+
+                if (location.special === 'research_data' && this.missionStatus.foundNote) {
+                    this.inventory.access_card.count = 1;
+                    this.addMessage('🔑 <strong>Найден ключ-карта доступа к эпицентру аномалии!</strong>', 'loot');
+                }
+
+                if (location.special === 'weapon_cache') {
+                    this.inventory.impulse_charges.count += 5;
+                    this.inventory.grenade.count += 3;
+                    this.addMessage('💥 <strong>Найден оружейный склад! +5 зарядов Импульса, +3 гранаты</strong>', 'loot');
+                }
+            }
+
+            useInventoryItem(itemKey) {
+                const item = this.inventory[itemKey];
+                if (!item || item.count <= 0) return;
+
+                switch(item.type) {
+                    case 'heal': this.useHealingItem(itemKey); break;
+                    case 'artifact': this.useArtifact(itemKey); break;
+                    case 'armor': this.useArmorPlate(itemKey); break;
+                    case 'utility': this.useUtilityItem(itemKey); break;
+                    case 'story': this.useStoryItem(itemKey); break;
+                    default: this.addMessage(`Предмет "${item.name}" нельзя использовать.`, 'system');
+                }
+            }
+
+            useStoryItem(itemKey) {
+                if (itemKey === 'scientist_note') {
+                    this.addMessage('<strong>📜 ЗАПИСКА УЧЕНОГО:</strong>', 'story-item');
+                    this.addMessage('"Координаты лаборатории: сектор 7-Гамма. КПП Северный и админздание ведут к подземному комплексу."', 'npc');
+                    this.addMessage('"Источник аномалии в эпицентре. Нужен ключ-карта из админздания."', 'npc');
+                    this.addMessage('✅ <strong>Карта обновлена! Новые локации разблокированы.</strong>', 'system');
+
+                    this.locations.checkpoint.locked = false;
+                    this.locations.admin_building.locked = false;
+                    this.updateMoveButtons();
+                }
+            }
+
+            useHealingItem(itemKey) {
+                const item = this.inventory[itemKey];
+                if (item.count <= 0) return;
+
+                item.count--;
+                let healedCount = 0;
+
+                Object.values(this.squad).forEach(member => {
+                    if (member.hp < member.maxHp) {
+                        member.hp = Math.min(member.maxHp, member.hp + 40);
+                        healedCount++;
+                    }
+                });
+
+                this.updateSquadStatus();
+                this.addMessage(`💚 Использована ${item.name}. Вылечено бойцов: ${healedCount}`, 'heal');
+                this.showInventory();
+            }
+
+            useArtifact(itemKey) {
+                const item = this.inventory[itemKey];
+                if (item.count <= 0) return;
+
+                item.count--;
+
+                if (itemKey === 'crystal_artifact') {
+                    Object.values(this.squad).forEach(member => member.hp = member.maxHp);
+                    this.addMessage(`✨ Кристалл Ясности сияет! Все бойцы полностью исцелены!`, 'heal');
+                }
+                else if (itemKey === 'storm_artifact') {
+                    if (this.inCombat) {
+                        this.enemyHP = Math.max(0, this.enemyHP - 75);
+                        this.addMessage(`🌪️ Сердце Бури выпускает бурю! Враг получает 75 урона!`, 'player');
+                        if (this.enemyHP <= 0) this.endCombat(true);
+                    } else {
+                        this.addMessage(`🌪️ Сердце Бури мерцает, но врагов поблизости нет.`, 'system');
+                    }
+                }
+
+                this.updateSquadStatus();
+                this.showInventory();
+            }
+
+            useArmorPlate(itemKey) {
+                const item = this.inventory[itemKey];
+                if (item.count <= 0) return;
+
+                item.count--;
+                const squadMembers = Object.values(this.squad);
+                const weakest = squadMembers.reduce((min, member) => member.armor < min.armor ? member : min);
+                weakest.armor += 25;
+                this.addMessage(`🛡️ Установлена бронепластина на ${weakest.name}. Броня: +25`, 'system');
+                this.showInventory();
+            }
+
+            useUtilityItem(itemKey) {
+                if (itemKey === 'detector') {
+                    this.addMessage(`📡 Детектор аномалий активирован. В радиусе 100м аномалий не обнаружено.`, 'system');
+                }
+            }
+
+            encounterEnemy() {
+                const enemies = [
+                    {name: 'Стая Зверенышей', hp: 60, damage: 15},
+                    {name: 'Искаженные-Стрелки', hp: 80, damage: 20},
+                    {name: 'Фантом', hp: 50, damage: 25}
+                ];
+                this.currentEnemy = enemies[Math.floor(Math.random() * enemies.length)];
+                this.enemyHP = this.currentEnemy.hp;
+                this.addMessage(`<strong class="danger">ВНЕЗАПНАЯ АТАКА: ${this.currentEnemy.name}!</strong>`, 'danger');
+                this.startCombat();
+            }
+
+            startCombat() {
+                this.inCombat = true;
+                document.getElementById('combat-controls').classList.remove('hidden');
+                document.getElementById('controls').classList.add('hidden');
+                this.addMessage('⚔️ НАЧАЛО БОЯ!', 'system');
+                this.showCombatStatus();
+            }
+
+            endCombat(victory) {
+                this.inCombat = false;
+                document.getElementById('combat-controls').classList.add('hidden');
+                document.getElementById('controls').classList.remove('hidden');
+
+                if (victory) {
+                    if (this.currentEnemy.name === 'ИСТОЧНИК АНОМАЛИИ') {
+                        this.missionStatus.destroyedSource = true;
+                        this.addMessage('💥 <strong>ИСТОЧНИК АНОМАЛИИ УНИЧТОЖЕН!</strong>', 'mission-complete');
+                        this.addMessage('🌅 Аномалия начинает рассеиваться. Нужно вернуться к точке эвакуации!', 'story-item');
+                    } else {
+                        this.addMessage('✅ Враг побежден!', 'system');
+                        if (Math.random() > 0.5) {
+                            this.inventory.ammo.count += 20;
+                            this.addMessage('Найдены патроны врага (+20 патронов)', 'loot');
+                        }
+                    }
+                } else {
+                    this.addMessage('❌ Отступление!', 'system');
+                }
+            }
+
+            showCombatStatus() {
+                let status = `<strong>СТАТУС БОЯ:</strong><br>`;
+                status += `Противник: ${this.currentEnemy.name} HP: ${this.enemyHP}/${this.currentEnemy.hp}<br>`;
+                status += `<strong>Ваш отряд:</strong><br>`;
+
+                Object.values(this.squad).forEach(member => {
+                    const barWidth = (member.hp / member.maxHp) * 100;
+                    status += `${member.name}: <div class="health-bar"><div class="health-fill" style="width: ${barWidth}%"></div></div> ${member.hp}/${member.maxHp} HP${member.armor > 0 ? ` 🛡️${member.armor}` : ''}<br>`;
+                });
+
+                this.addMessage(status, 'system');
+            }
+
+            combatAction(action) {
+                if (!this.inCombat) return;
+
+                switch(action) {
+                    case 'attack':
+                        if (this.inventory.ammo.count >= 10) this.attackEnemy();
+                        else this.addMessage('Недостаточно патронов! Нужно 10 патронов.', 'system');
+                        break;
+                    case 'grenade':
+                        if (this.inventory.grenade.count > 0) this.useGrenade();
+                        else this.addMessage('Нет гранат!', 'system');
+                        break;
+                    case 'impulse':
+                        if (this.inventory.impulse_charges.count > 0) this.useImpulse();
+                        else this.addMessage('Нет зарядов Импульса!', 'system');
+                        break;
+                    case 'heal':
+                        if (this.inventory.medkit.count > 0) this.healSquad();
+                        else this.addMessage('Нет аптечек!', 'system');
+                        break;
+                    case 'retreat': this.retreat(); return;
+                }
+
+                if (this.enemyHP > 0) setTimeout(() => this.enemyTurn(), 1000);
+            }
+
+            attackEnemy() {
+                this.inventory.ammo.count -= 10;
+                const roll = this.rollD20();
+                let damage = 0;
+
+                if (roll >= 15) damage = 25;
+                else if (roll >= 8) damage = 15;
+                else this.addMessage(`❌ Промах! (патронов: ${this.inventory.ammo.count})`, 'player');
+
+                if (damage > 0) {
+                    this.enemyHP = Math.max(0, this.enemyHP - damage);
+                    this.addMessage(`✅ ${roll >= 15 ? 'Критическое ' : ''}Попадание! Урон: ${damage} (патронов: ${this.inventory.ammo.count})`, 'player');
+                    this.addMessage(`Здоровье врага: ${this.enemyHP}/${this.currentEnemy.hp}`, 'system');
+                    if (this.enemyHP <= 0) this.endCombat(true);
+                }
+            }
+
+            useGrenade() {
+                this.inventory.grenade.count--;
+                const damage = 40;
+                this.enemyHP = Math.max(0, this.enemyHP - damage);
+                this.addMessage(`💣 Граната! Урон: ${damage} (гранат: ${this.inventory.grenade.count})`, 'player');
+                this.addMessage(`Здоровье врага: ${this.enemyHP}/${this.currentEnemy.hp}`, 'system');
+                if (this.enemyHP <= 0) this.endCombat(true);
+            }
+
+            useImpulse() {
+                this.inventory.impulse_charges.count--;
+                const damage = 60;
+                this.enemyHP = Math.max(0, this.enemyHP - damage);
+                this.addMessage(`⚡ ИМПУЛЬС! Урон: ${damage} (зарядов: ${this.inventory.impulse_charges.count})`, 'player');
+                this.addMessage(`Здоровье врага: ${this.enemyHP}/${this.currentEnemy.hp}`, 'system');
+                if (this.enemyHP <= 0) this.endCombat(true);
+            }
+
+            healSquad() {
+                this.inventory.medkit.count--;
+                let healedCount = 0;
+                Object.values(this.squad).forEach(member => {
+                    if (member.hp < member.maxHp) {
+                        member.hp = Math.min(member.maxHp, member.hp + 30);
+                        healedCount++;
+                    }
+                });
+                this.updateSquadStatus();
+                this.addMessage(`💚 Аптечка. Вылечено: ${healedCount} (аптечек: ${this.inventory.medkit.count})`, 'heal');
+                this.showCombatStatus();
+            }
+
+            retreat() {
+                const success = this.rollD20() > 10;
+                if (success) {
+                    this.addMessage('✅ Успешное отступление!', 'system');
+                    this.endCombat(false);
+                } else {
+                    this.addMessage('❌ Не удалось отступить!', 'danger');
+                    this.enemyTurn();
+                }
+            }
+
+            enemyTurn() {
+                const roll = this.rollD20();
+                if (roll >= 12) {
+                    const damage = this.currentEnemy.damage;
+                    const squadMembers = Object.values(this.squad);
+                    const target = squadMembers[Math.floor(Math.random() * squadMembers.length)];
+
+                    let actualDamage = damage;
+                    if (target.armor > 0) {
+                        const armorReduction = Math.min(target.armor, damage);
+                        actualDamage = damage - armorReduction;
+                        target.armor -= armorReduction;
+                        this.addMessage(`🛡️ Броня поглотила ${armorReduction} урона!`, 'system');
+                    }
+
+                    target.hp = Math.max(0, target.hp - actualDamage);
+                    this.updateSquadStatus();
+                    this.addMessage(`💥 ${this.currentEnemy.name} атакует ${target.name}! Урон: ${actualDamage}`, 'danger');
+                    this.showCombatStatus();
+
+                    if (target.hp === 0) this.addMessage(`💀 ${target.name} ПОГИБ В БОЮ!`, 'danger');
+                } else {
+                    this.addMessage(`❌ ${this.currentEnemy.name} промахивается!`, 'system');
+                }
+            }
+
+            startFinalBattle() {
+                this.currentEnemy = {name: 'ИСТОЧНИК АНОМАЛИИ', hp: 200, damage: 30};
+                this.enemyHP = this.currentEnemy.hp;
+                this.addMessage('<strong class="danger">ФИНАЛЬНАЯ БИТВА НАЧАЛАСЬ!</strong>', 'danger');
+                this.startCombat();
+            }
+
+            updateSquadStatus() {
+                Object.values(this.squad).forEach(member => {
+                    const hpPercent = (member.hp / member.maxHp) * 100;
+                    if (hpPercent >= 70) member.status = 'Здоров';
+                    else if (hpPercent >= 40) member.status = 'Легко ранен';
+                    else if (hpPercent >= 15) member.status = 'Тяжело ранен';
+                    else if (hpPercent > 0) member.status = 'Критическое состояние';
+                    else member.status = 'Погиб';
+                });
+            }
+
+            showInventory() {
+                document.getElementById('inventory-controls').classList.remove('hidden');
+                document.getElementById('controls').classList.add('hidden');
+                const container = document.getElementById('inventory-items');
+                container.innerHTML = '';
+
+                Object.entries(this.inventory).forEach(([key, item]) => {
+                    if (item.count > 0) {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'inventory-item';
+                        itemDiv.innerHTML = `<strong>${item.name}</strong>: ${item.count} шт. ${item.usable ? `<button onclick="game.useInventoryItem('${key}')">Использовать</button>` : ''}`;
+                        container.appendChild(itemDiv);
+                    }
+                });
+            }
+
+            hideInventory() {
+                document.getElementById('inventory-controls').classList.add('hidden');
+                document.getElementById('controls').classList.remove('hidden');
+            }
+
+            showStatus() {
+                let statusText = '<strong>СТАТУС ОТРЯДА:</strong><br>';
+                Object.values(this.squad).forEach(member => {
+                    const barWidth = (member.hp / member.maxHp) * 100;
+                    statusText += `<div class="squad-member">${member.name} (${member.role}): <div class="health-bar"><div class="health-fill" style="width: ${barWidth}%"></div></div> ${member.hp}/${member.maxHp} HP ${member.armor > 0 ? `🛡️${member.armor}` : ''} - ${member.status}</div>`;
+                });
+                this.addMessage(statusText, 'system');
+            }
+
+            showMap() {
+                let mapText = '<strong>КАРТА ЗОНЫ:</strong><br>';
+                Object.entries(this.locations).forEach(([id, loc]) => {
+                    const visited = this.visitedLocations.has(id) ? '✓' : '?';
+                    const current = this.currentLocation === id ? '📍' : '';
+                    mapText += `${visited} ${current} ${loc.name}${loc.locked && !this.canAccessLocation(id) ? ' [ЗАБЛОКИРОВАНО]' : ''}<br>`;
+                });
+                this.addMessage(mapText, 'system');
+            }
+
+            completeMission() {
+                this.missionStatus.evacuated = true;
+                this.gameActive = false;
+
+                document.getElementById('controls').classList.add('hidden');
+                document.getElementById('combat-controls').classList.add('hidden');
+                document.getElementById('credits').classList.remove('hidden');
+
+                const creditsContent = document.getElementById('credits-content');
+                creditsContent.innerHTML = `
+                    <p class="mission-complete">МИССИЯ ВЫПОЛНЕНА УСПЕШНО!</p>
+                    <p>Отряд "${this.squad.leader.name}" выполнил все задачи:</p>
+                    <p>✅ Найдена группа "Прометей"</p>
+                    <p>✅ Уничтожен источник аномалии</p>
+                    <p>✅ Эвакуация проведена без потерь</p>
+
+                    <p><strong>Итоги операции:</strong></p>
+                    <p>• Спасены исследовательские данные</p>
+                    <p>• Угроза аномалии устранена</p>
+                    <p>• Зона стабилизируется</p>
+
+                    <p class="story-item">"Осколок Мира" стабилизирован. АСПИД благодарит отряд за службу.</p>
+
+                    <p><strong>Состав отряда:</strong></p>
+                    <p>• ${this.squad.leader.name} - Командир</p>
+                    <p>• ${this.squad.bars.name} - Штурмовик</p>
+                    <p>• ${this.squad.sokol.name} - Снайпер</p>
+                    <p>• ${this.squad.ghost.name} - Разведчик</p>
+                    <p>• ${this.squad.medic.name} - Медик</p>
+
+                    <p class="mission-complete">СПАСИБО ЗА ИГРУ!</p>
+                `;
+            }
+
+            async startGame() {
+              this.playVoiceover();
+                await this.typewriterEffect('АСПИД: Агентство Специальных Противодействий Ирреальным Деформациям', 'npc', 50);
+                await this.delay(1200);
+                await this.typewriterEffect('Миссия: "Осколок Мира"', 'system', 50);
+                await this.delay(800);
+                await this.typewriterEffect('Задачи: <br> 1. Найти исследовательскую группу "Прометей" <br> 2. Уничтожить Источник', 'system',70);
+                await this.delay(2000);
+
+                this.showSquadIntroduction();
+                await this.delay(1000);
+
+                this.addMessage('--- ВЕРТОЛЕТ ПРИЗЕМЛИЛСЯ ---', 'system');
+                this.addMessage(this.locations.start.desc, 'location-desc');
+                this.updateMoveButtons();
+                this.gameActive = true;
+            }
+
+            delay(ms) {
+                 return new Promise(resolve => setTimeout(resolve, ms));
+             }
+
+             playVoiceover() {
+                 this.audio.play().catch(e => {
+                     console.log('Автовоспроизведение заблокировано:', e);
+                 });
+             }
+         }
+
+        const game = new TextAdventureGame();
+
+        function startGameWithCustomNames() {
+            const leader = document.getElementById('leader').value.trim();
+            const bars = document.getElementById('bars').value.trim();
+            const sokol = document.getElementById('sokol').value.trim();
+            const ghost = document.getElementById('ghost').value.trim();
+            const medic = document.getElementById('medic').value.trim();
+
+            if (!leader || !bars || !sokol || !ghost || !medic) {
+                alert('Введите имена для всех членов отряда!');
+                return;
+            }
+
+            game.setSquadNames({leader, bars, sokol, ghost, medic});
+            document.getElementById('character-creation').classList.add('hidden');
+            document.getElementById('game-content').classList.remove('hidden');
+            game.startGame();
+        }
+
+        function gameAction(action) { if (game.gameActive) game.lookAround(); }
+        function showInventory() { game.showInventory(); }
+        function showStatus() { game.showStatus(); }
+        function showMap() { game.showMap(); }
+        function combatAction(action) { game.combatAction(action); }
+        function hideInventory() { game.hideInventory(); }
+
+        window.game = game;
+        window.onload = () => {
+            document.getElementById('leader').value = 'Капитан';
+            document.getElementById('bars').value = 'Танк';
+            document.getElementById('sokol').value = 'Орёл';
+            document.getElementById('ghost').value = 'Тень';
+            document.getElementById('medic').value = 'Доктор';
+        };
+    </script>
+</body>
+</html>
