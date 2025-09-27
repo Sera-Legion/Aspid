@@ -288,7 +288,7 @@
 
                 this.visitedLocations = new Set(['start']);
                 this.gameActive = false;
-                this.audio = new Audio('озвучка1.mp3');
+                this.audio = new Audio('sounds/озвучка1.mp3');
                 this.missionStatus = {
                     foundNote: false,
                     foundPrometheus: false,
